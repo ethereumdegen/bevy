@@ -253,6 +253,13 @@ pub struct LoadDirectError {
     pub error: AssetLoadError,
 }
 
+/// An error that occurs when attempting to call [`LoadContext::load_direct`]
+#[derive(Error, Debug)]
+#[error("Failed to load dependency {dependency:?} {error}")]
+pub struct LoadWithReaderError { 
+    pub error: AssetLoadError,
+}
+
 /// An error that occurs while deserializing [`AssetMeta`].
 #[derive(Error, Debug)]
 pub enum DeserializeMetaError {
@@ -268,7 +275,7 @@ pub struct LoadContext<'a> {
     asset_server: &'a AssetServer,
     should_load_dependencies: bool,
     populate_hashes: bool,
-    asset_path: AssetPath<'static>,
+    asset_path: Option<AssetPath<'static>>,   //some assets can be loaded without a path 
     dependencies: HashSet<UntypedAssetId>,
     /// Direct dependencies used by this loader.
     loader_dependencies: HashMap<AssetPath<'static>, AssetHash>,
@@ -279,7 +286,7 @@ impl<'a> LoadContext<'a> {
     /// Creates a new [`LoadContext`] instance.
     pub(crate) fn new(
         asset_server: &'a AssetServer,
-        asset_path: AssetPath<'static>,
+        asset_path: Option<AssetPath<'static>>,
         should_load_dependencies: bool,
         populate_hashes: bool,
     ) -> Self {
@@ -405,12 +412,15 @@ impl<'a> LoadContext<'a> {
     }
 
     /// Gets the source path for this load context.
-    pub fn path(&self) -> &Path {
-        self.asset_path.path()
+    pub fn path(&self) -> Option<&Path> {
+        match self.asset_path {
+            Some(asset_path) => Some(asset_path.path()),
+            None => None   
+        }
     }
 
     /// Gets the source asset path for this load context.
-    pub fn asset_path(&self) -> &AssetPath<'static> {
+    pub fn asset_path(&self) -> &Option<AssetPath<'static>> {
         &self.asset_path
     }
 
@@ -534,6 +544,55 @@ impl<'a> LoadContext<'a> {
             .and_then(|m| m.processed_info().as_ref());
         let hash = info.map(|i| i.full_hash).unwrap_or(Default::default());
         self.loader_dependencies.insert(path, hash);
+        Ok(loaded_asset)
+    }
+    
+    /// Loads the asset using the given reader. This is an async function that will wait until the asset is fully loaded before
+    /// returning. Use this if you need the _value_ of another asset in order to load the current asset. For example, if you are
+    /// deriving a new asset from the referenced asset, or you are building a collection of assets. This will add the `path` as a
+    /// "load dependency".
+    ///
+    /// If the current loader is used in a [`Process`] "asset preprocessor", such as a [`LoadAndSave`] preprocessor,
+    /// changing a "load dependency" will result in re-processing of the asset.
+    ///
+    /// [`Process`]: crate::processor::Process
+    /// [`LoadAndSave`]: crate::processor::LoadAndSave
+    pub async fn load_with_reader<'b>(
+        &mut self,  
+        mut loader: &dyn ErasedAssetLoader,
+        mut reader: Box<Reader<'b>>,
+    ) -> Result<ErasedLoadedAsset, LoadWithReaderError> {
+       
+        let to_error = |e: AssetLoadError| -> LoadWithReaderError {
+            LoadWithReaderError { 
+                error: e,
+            }
+        }; 
+        let loaded_asset = {
+         
+            self.asset_server
+                .load_with_reader(  
+                    &  *loader, 
+                    &mut *reader,
+                    false,
+                    self.populate_hashes,
+                )
+                .await
+                .map_err(to_error)?
+        };
+        let info = loaded_asset
+            .meta
+            .as_ref()
+            .and_then(|m| m.processed_info().as_ref());
+        
+        
+        let hash = info.map(|i| i.full_hash).unwrap_or(Default::default());
+        
+        
+        
+      //  self.loader_dependencies.insert(path, hash);
+        
+        
         Ok(loaded_asset)
     }
 }

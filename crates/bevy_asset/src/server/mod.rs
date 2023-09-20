@@ -697,11 +697,31 @@ impl AssetServer {
         // TODO: experiment with this
         let asset_path = asset_path.clone().into_owned();
         let load_context =
-            LoadContext::new(self, asset_path.clone(), load_dependencies, populate_hashes);
+            LoadContext::new(self, Some(asset_path.clone()), load_dependencies, populate_hashes);
         loader.load(reader, meta, load_context).await.map_err(|e| {
             AssetLoadError::AssetLoaderError {
                 loader: loader.type_name(),
                 path: asset_path,
+                error: e,
+            }
+        })
+    }
+    
+     pub(crate) async fn load_with_reader(
+        &self,
+      
+        loader: &dyn ErasedAssetLoader,
+        reader: &mut Reader<'_>,
+        load_dependencies: bool,
+        populate_hashes: bool,
+    ) -> Result<ErasedLoadedAsset, AssetLoadError> {
+        // TODO: experiment with this
+     //   let asset_path = asset_path.clone().into_owned();
+        let load_context =
+            LoadContext::new(self, None, load_dependencies, populate_hashes);
+        loader.load(reader, meta, load_context).await.map_err(|e| {
+            AssetLoadError::AssetWithReaderLoaderError {
+               
                 error: e,
             }
         })
@@ -864,6 +884,11 @@ pub enum AssetLoadError {
     #[error("Asset '{path}' encountered an error in {loader}: {error}")]
     AssetLoaderError {
         path: AssetPath<'static>,
+        loader: &'static str,
+        error: AssetLoaderError,
+    }, 
+    #[error("Asset with reader encountered an error in {loader}: {error}")]
+    AssetWithReaderLoaderError {
         loader: &'static str,
         error: AssetLoaderError,
     },
