@@ -417,7 +417,7 @@ async fn load_gltf<'a, 'b, 'c>(
                     &loader.custom_vertex_attributes,
                 ) {
                     Ok((attribute, values)) => mesh.insert_attribute(attribute, values),
-                    Err(err) => warn!("{}", err),
+                    Err(err) => warn!("{:?}   {}",   primitive_label,  err),
                 }
             }
 
