@@ -179,6 +179,8 @@ async fn load_gltf<'a, 'b, 'c>(
     let gltf = gltf::Gltf::from_slice(bytes)?;
     let buffer_data = load_buffers(&gltf, load_context).await?;
 
+    println!("loading {:?}", load_context.asset_path().path() );
+
     let mut linear_textures = HashSet::default();
 
     for material in gltf.materials() {
@@ -410,6 +412,7 @@ async fn load_gltf<'a, 'b, 'c>(
                         error!("Skinned mesh {:?} used on both skinned and non skin nodes, this is likely to cause an error (NODE_SKINNED_MESH_WITHOUT_SKIN)", primitive_label);
                     }
                 }
+              
                 match convert_attribute(
                     semantic,
                     accessor,
@@ -417,7 +420,7 @@ async fn load_gltf<'a, 'b, 'c>(
                     &loader.custom_vertex_attributes,
                 ) {
                     Ok((attribute, values)) => mesh.insert_attribute(attribute, values),
-                    Err(err) => warn!("{:?}   {}",   primitive_label,  err),
+                    Err(err) => warn!("convert_attribute {:?}   {}",   primitive_label,  err),
                 }
             }
 
